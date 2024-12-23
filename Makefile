@@ -40,7 +40,7 @@ all: clean lint test build
 
 .PHONY: lint
 lint:
-	$(GO_LINT) version || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GO_PATH)/bin -d "v1.46.2"
+	$(GO_LINT) version || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GO_PATH)/bin -d "v1.55.2"
 	$(GO_LINT) run -v --timeout 5m ./...
 
 .PHONY: fix-lint
@@ -106,3 +106,8 @@ install: $(GOOS)
 .PHONY: uninstall
 uninstall: $(GOOS)
 	-rm $(DESTDIR)/$(PROJECT)
+
+.PHONY: e2e-test
+e2e-test: $(GOOS)
+	- make build
+	- ./bin/$(GOOS)/$(PROJECT) run -c ./test/e2e/e2e.yaml

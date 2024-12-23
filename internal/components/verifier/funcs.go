@@ -31,7 +31,7 @@ import (
 
 // funcMap produces the custom function map.
 // Use this to pass the functions into the template engine:
-// 	tpl := template.New("foo").Funcs(funcMap()))
+// tpl := template.New("foo").Funcs(funcMap()))
 func funcMap() template.FuncMap {
 	fm := make(map[string]any, len(customFuncMap))
 	for k, v := range customFuncMap {
@@ -51,6 +51,9 @@ var customFuncMap = map[string]any{
 
 	// Regex:
 	"regexp": regexpMatch,
+
+	// Calculation:
+	"subtractor": subtractor,
 }
 
 func base64encode(s string) string {
@@ -92,4 +95,11 @@ func regexpMatch(s, pattern string) string {
 		return fmt.Sprintf("<%s does not match the pattern %q>", s, pattern)
 	}
 	return s
+}
+
+func subtractor(total int, nums ...int) int {
+	for _, num := range nums {
+		total -= num
+	}
+	return total
 }

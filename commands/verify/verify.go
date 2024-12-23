@@ -43,6 +43,8 @@ func init() {
 	Verify.Flags().StringVarP(&query, "query", "q", "", "the query to get the actual data, the result of the query should in YAML format")
 	Verify.Flags().StringVarP(&actual, "actual", "a", "", "the actual data file, only YAML file format is supported")
 	Verify.Flags().StringVarP(&expected, "expected", "e", "", "the expected data file, only YAML file format is supported")
+	Verify.Flags().StringVarP(&output.Format, "output", "o", "yaml", "output the verify summary in which format. Currently, only 'yaml' is supported. ")
+	Verify.Flags().BoolVarP(&output.SummaryOnly, "summary-only", "", false, "if true, only 'SUMMARY' part of the verify result will be outputted")
 }
 
 // Verify verifies that the actual data satisfies the expected data pattern.
@@ -106,6 +108,7 @@ func concurrentlyVerifySingleCase(
 	verifyInfo *verifyInfo,
 ) (res *output.CaseResult) {
 	res = &output.CaseResult{}
+	res.Name = caseName(v)
 	defer func() {
 		if res.Err != nil && verifyInfo.failFast {
 			cancel()
@@ -162,6 +165,7 @@ func verifyCasesConcurrently(verify *config.Verify, verifyInfo *verifyInfo) erro
 			select {
 			case <-ctx.Done():
 				res[i].Skip = true
+				res[i].Name = caseName(&verify.Cases[i])
 				return
 			default:
 				// It's safe to do this, since each goroutine only modifies a single, different, designated slice element.
@@ -171,9 +175,13 @@ func verifyCasesConcurrently(verify *config.Verify, verifyInfo *verifyInfo) erro
 	}
 	wg.Wait()
 
-	_, errNum, _ := printer.PrintResult(res)
-	if errNum > 0 {
-		return fmt.Errorf("failed to verify %d case(s)", errNum)
+	if output.SummaryOnly {
+		output.PrintResult(res)
+	} else {
+		_, errNum, _ := printer.PrintResult(res)
+		if errNum > 0 {
+			return fmt.Errorf("failed to verify %d case(s)", errNum)
+		}
 	}
 
 	return nil
@@ -186,13 +194,18 @@ func verifyCasesSerially(verify *config.Verify, verifyInfo *verifyInfo) (err err
 	for i := range res {
 		res[i] = &output.CaseResult{
 			Skip: true,
+			Name: caseName(&verify.Cases[i]),
 		}
 	}
 
 	defer func() {
-		_, errNum, _ := printer.PrintResult(res)
-		if errNum > 0 {
-			err = fmt.Errorf("failed to verify %d case(s)", errNum)
+		if output.SummaryOnly {
+			output.PrintResult(res)
+		} else {
+			_, errNum, _ := printer.PrintResult(res)
+			if errNum > 0 {
+				err = fmt.Errorf("failed to verify %d case(s)", errNum)
+			}
 		}
 	}()
 
@@ -231,7 +244,7 @@ func verifyCasesSerially(verify *config.Verify, verifyInfo *verifyInfo) (err err
 				}
 				time.Sleep(verifyInfo.interval)
 			} else {
-				res[idx].Msg = fmt.Sprintf("failed to verify %v, retried %d time(s):", caseName(v), current)
+				res[idx].Msg = fmt.Sprintf("failed to verify %v, retried %d time(s)", caseName(v), current)
 				res[idx].Err = e
 				res[idx].Skip = false
 				printer.UpdateText(fmt.Sprintf("failed to verify %v, retry [%d/%d]", caseName(v), current, verifyInfo.retryCount))
@@ -259,6 +272,9 @@ func caseName(v *config.VerifyCase) string {
 
 // DoVerifyAccordingConfig reads cases from the config file and verifies them.
 func DoVerifyAccordingConfig() error {
+	if output.SummaryOnly && !output.HasFormat() && output.Format != "yaml" {
+		return fmt.Errorf(" '%s' format doesn't exist", output.Format)
+	}
 	if config.GlobalConfig.Error != nil {
 		return config.GlobalConfig.Error
 	}
@@ -284,11 +300,10 @@ func DoVerifyAccordingConfig() error {
 	concurrency := e2eConfig.Verify.Concurrency
 	if concurrency {
 		// enable batch output mode when concurrency is enabled
-		printer = output.NewPrinter(true)
+		printer = output.NewPrinter(output.WithBatchOutput(true), output.WithSummaryOnly(output.SummaryOnly))
 		return verifyCasesConcurrently(&e2eConfig.Verify, &VerifyInfo)
 	}
-
-	printer = output.NewPrinter(util.BatchMode)
+	printer = output.NewPrinter(output.WithBatchOutput(util.BatchMode), output.WithSummaryOnly(output.SummaryOnly))
 	return verifyCasesSerially(&e2eConfig.Verify, &VerifyInfo)
 }
 

@@ -14,7 +14,36 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+//
 
-package commands
+package util
 
-var version string
+import (
+	"os"
+	"testing"
+)
+
+const (
+	testEnvFile  = "./testdata/env"
+	testEnvKey   = "TEST_ENV"
+	normalEnvKey = "NORMAL_ENV"
+)
+
+func TestExportEnvVars(t *testing.T) {
+	// default value
+	ExportEnvVars(testEnvFile)
+	if os.Getenv(testEnvKey) != "abc" {
+		t.Errorf("expected %s, got %s", "abc", os.Getenv(testEnvKey))
+	}
+	if os.Getenv(normalEnvKey) != "test" {
+		t.Errorf("expected %s, got %s", "test", os.Getenv(normalEnvKey))
+	}
+
+	// override value from outside
+	var settingValFromOutside = "def"
+	os.Setenv("TEST", settingValFromOutside)
+	ExportEnvVars(testEnvFile)
+	if os.Getenv(testEnvKey) != settingValFromOutside {
+		t.Errorf("expected %s, got %s", settingValFromOutside, os.Getenv(testEnvKey))
+	}
+}
